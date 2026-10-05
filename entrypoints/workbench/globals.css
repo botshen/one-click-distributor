@@ -1,0 +1,625 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/* ────────────────────────────────────────────────────────────────────────────
+   视觉语言：shadcn/ui 官方默认（base color = neutral，Tailwind v4 / oklch）
+     background #fff · foreground neutral-950 · primary neutral-900
+     muted / accent neutral-100 · border neutral-200 · ring neutral-400
+     destructive = red-600
+   语义层的值与 shadcn CLI 生成的 globals.css 保持一字不差，方便以后直接跟
+   官方升级。项目自有的 paper/ink/line 阶梯只是给这套语义色起了业务名，
+   全部指向同一批官方值，不引入第二套灰。
+
+   状态四态（success / warning / info / running）shadcn 官方没有定义，这里按
+   官方的语义 token 方式补充。成功与提醒色刻意降低饱和度，避免状态重复出现时
+   抢过正文层级；错误与进行中仍保留更明确的识别度。
+   ──────────────────────────────────────────────────────────────────────── */
+
+@theme inline {
+  /* ── shadcn 语义色 ───────────────────────────────────────── */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* ── 中性阶梯的业务别名（全部落在 neutral 上）──────────────── */
+  --color-paper: var(--paper);
+  --color-sunken: var(--sunken);
+  --color-wash: var(--wash);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-strong: var(--ink-strong);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-ghost: var(--ink-ghost);
+
+  /* ── 状态色（官方缺，按官方方式补）────────────────────────── */
+  --color-success: var(--success);
+  --color-success-ink: var(--success-ink);
+  --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
+  --color-danger: var(--danger);
+  --color-danger-ink: var(--danger-ink);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+  --color-warning: var(--warning);
+  --color-warning-ink: var(--warning-ink);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-info: var(--info);
+  /* info 只暴露实心那一档的 utility：-ink/-soft/-line 三个变量确实存在（下面被
+     --running-* 引用），但业务层用的是 running-* 那组名字，再开一套 info-*
+     的 class 就是两个名字指同一个颜色——上一版就是这么出现三套重复状态色的。 */
+  --color-running: var(--running);
+  --color-running-ink: var(--running-ink);
+  --color-running-soft: var(--running-soft);
+  --color-running-line: var(--running-line);
+
+  /* ── 圆角：shadcn 官方四档 + 对话框用的一档 ───────────────── */
+  --radius-sm: calc(var(--radius) - 4px); /* 6px  进度条、微 tag */
+  --radius-md: calc(var(--radius) - 2px); /* 8px  输入、徽章、图标方块 */
+  --radius-lg: var(--radius); /* 10px 按钮、行项、chip */
+  --radius-xl: calc(var(--radius) + 4px); /* 14px 卡片 */
+  --radius-2xl: calc(var(--radius) + 8px); /* 18px 对话框 */
+
+  /* ── 阴影：值等于 Tailwind 默认的 xs / sm / lg，也就是 shadcn 组件
+     里 shadow-xs、shadow-sm、shadow-lg 用的那三档。这里只是给它们起了
+     业务名，避免业务层同时出现两套阴影语言。
+     命名避开所有颜色 token，否则会与 --color-* 生成的彩色阴影 utility
+     撞名（例：--shadow-card 会撞 --color-card 的 shadow-card）*/
+  --shadow-panel: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-raise: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-float: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* ── 字号台阶 ────────────────────────────────────────────────
+     刻意只设 font-size、不设 --*--line-height：业务层原本写的是
+     text-[11px] 这类任意值（不带行高），行高一直由容器和个别 leading-*
+     控制。若在 token 上带行高，这 236 处替换就会连带改掉行高，变成一次
+     看不见的布局改动。行高要成体系是下一件事，不混在配色里做。
+     名字刻意不与颜色 token 重名，否则会与 --color-* 生成的 utility 撞。 */
+  --text-tag: 0.5625rem; /* 9px  格式小徽章 */
+  --text-micro: 0.625rem; /* 10px 角标、数值、时间 */
+  --text-meta: 0.6875rem; /* 11px 次要说明（用量最大的一档）*/
+  --text-label: 0.75rem; /* 12px 段标题、小按钮 */
+  --text-body: 0.8125rem; /* 13px 正文（= body 基准）*/
+  --text-title: 0.875rem; /* 14px 卡片标题 */
+  --text-hero: 1rem; /* 16px 对话框标题、页面标题 */
+}
+
+:root {
+  /* ↓↓↓ 以下 15 行与 shadcn CLI 生成的 neutral 主题完全一致 ↓↓↓ */
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  /* ↑↑↑ 官方部分到此结束 ↑↑↑ */
+
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* 中性阶梯的业务别名。没有一个是新色：全是 neutral-50…950 这一条线，
+     和上面的 background / border / muted-foreground 共用同一批值。 */
+  --paper: var(--background); /* #fff        */
+  /* sunken 用 neutral-100（= muted/accent 这一档官方唯一的灰面）而不是 -50：
+     -50 是 oklch 0.985，在白卡上几乎看不出是一块面，内嵌区域的层次会整体丢失。
+     wash 0.94 是这套里唯一一个不在 Tailwind 阶梯上的值，它只负责 hover：
+     neutral-100 与 sunken 同色会让 hover 没反馈，neutral-200 又与 border 同色
+     会把描边吃掉，所以取中间。 */
+  --sunken: oklch(0.97 0 0); /* neutral-100 */
+  --wash: oklch(0.94 0 0); /* hover 面，介于 neutral-100 与 -200 */
+  --line: var(--border); /* neutral-200 */
+  --line-soft: oklch(0.97 0 0); /* neutral-100 */
+  --line-strong: oklch(0.87 0 0); /* neutral-300 */
+  --ink: var(--foreground); /* neutral-950 */
+  --ink-strong: oklch(0.269 0 0); /* neutral-800 */
+  --ink-soft: var(--muted-foreground); /* neutral-500 */
+  --ink-faint: oklch(0.708 0 0); /* neutral-400 = ring */
+  --ink-ghost: oklch(0.87 0 0); /* neutral-300 */
+
+  /* 成功态使用偏墨的低饱和绿。大列表里图标框和标签会连续出现，若直接采用
+     green-600 / 200 会形成一整列荧光色块，反而压过任务标题。 */
+  --success: oklch(0.545 0.105 158);
+  --success-ink: oklch(0.445 0.09 158);
+  --success-soft: oklch(0.975 0.012 158);
+  --success-line: oklch(0.89 0.036 158);
+  --danger: var(--destructive); /* red-600   */
+  --danger-ink: oklch(0.505 0.213 27.518); /* red-700   */
+  --danger-soft: oklch(0.971 0.013 17.38); /* red-50    */
+  --danger-line: oklch(0.885 0.062 18.334); /* red-200   */
+  --warning: oklch(0.62 0.12 64);
+  --warning-ink: oklch(0.5 0.105 58);
+  --warning-soft: oklch(0.982 0.012 86);
+  --warning-line: oklch(0.91 0.045 82);
+  --info: oklch(0.546 0.245 262.881); /* blue-600  */
+  --info-ink: oklch(0.488 0.243 264.376); /* blue-700  */
+  --info-soft: oklch(0.97 0.014 254.604); /* blue-50   */
+  --info-line: oklch(0.882 0.059 254.128); /* blue-200  */
+
+  /* "进行中"复用 info：黑色的 primary 无法表达"正在动"，而 success 绿和
+     danger 红都已被终态占用，蓝是四态里唯一还空着且色相间距最大的一档。 */
+  --running: var(--info);
+  --running-ink: var(--info-ink);
+  --running-soft: var(--info-soft);
+  --running-line: var(--info-line);
+
+  /* ── 格式方块的三档色（给 action-palette 的 inline style 用）──────
+     浅色：Tailwind 50 / 200 / 700；深色：500@15% 底 + 400 字 + 500@30% 边。
+     深色不能沿用 50 档浅底，否则 28px 的方块在深色卡片上是一片亮斑。 */
+  --fmt-lark-bg: oklch(0.97 0.025 250);
+  --fmt-lark-fg: oklch(0.52 0.19 250);
+  --fmt-lark-line: oklch(0.92 0.05 250);
+  --fmt-notion-bg: oklch(0.97 0.018 278);
+  --fmt-notion-fg: oklch(0.48 0.17 278);
+  --fmt-notion-line: oklch(0.91 0.045 278);
+  --fmt-obsidian-bg: oklch(0.965 0.035 294);
+  --fmt-obsidian-fg: oklch(0.51 0.24 294);
+  --fmt-obsidian-line: oklch(0.9 0.07 294);
+  --fmt-sheet-bg: oklch(0.982 0.018 155.826);
+  --fmt-sheet-fg: oklch(0.527 0.154 150.069);
+  --fmt-sheet-line: oklch(0.982 0.018 155.826);
+  --fmt-doc-bg: oklch(0.97 0.014 254.604);
+  --fmt-doc-fg: oklch(0.488 0.243 264.376);
+  --fmt-doc-line: oklch(0.97 0.014 254.604);
+  --fmt-text-bg: oklch(0.984 0.014 180.72);
+  --fmt-text-fg: oklch(0.511 0.096 186.391);
+  --fmt-text-line: oklch(0.984 0.014 180.72);
+  --fmt-markup-bg: oklch(0.98 0.016 73.684);
+  --fmt-markup-fg: oklch(0.553 0.195 38.402);
+  --fmt-markup-line: oklch(0.98 0.016 73.684);
+  /* 单文件 HTML：同色相但底色推到 100 档、描边用 200，两行 HTML 并排时
+     有明暗差而不是两个一模一样的橙色方块 */
+  --fmt-markup-alt-bg: oklch(0.954 0.038 75.164);
+  --fmt-markup-alt-fg: oklch(0.553 0.195 38.402);
+  --fmt-markup-alt-line: oklch(0.901 0.076 70.697);
+  --fmt-image-bg: oklch(0.971 0.014 343.198);
+  --fmt-image-fg: oklch(0.525 0.223 3.958);
+  --fmt-image-line: oklch(0.971 0.014 343.198);
+  --fmt-media-bg: oklch(0.969 0.016 293.756);
+  --fmt-media-fg: oklch(0.491 0.27 292.581);
+  --fmt-media-line: oklch(0.969 0.016 293.756);
+  --fmt-bundle-bg: oklch(0.987 0.026 102.212);
+  --fmt-bundle-fg: oklch(0.554 0.135 66.442);
+  --fmt-bundle-line: oklch(0.987 0.026 102.212);
+  --fmt-print-bg: oklch(0.971 0.013 17.38);
+  --fmt-print-fg: oklch(0.505 0.213 27.518);
+  --fmt-print-line: oklch(0.936 0.032 17.717);
+  --fmt-security-bg: oklch(0.97 0.014 254.604);
+  --fmt-security-fg: oklch(0.546 0.245 262.881);
+  --fmt-security-line: oklch(0.932 0.032 255.585);
+  --fmt-link-bg: oklch(0.984 0.019 200.873);
+  --fmt-link-fg: oklch(0.488 0.125 193.4);
+  --fmt-link-line: oklch(0.917 0.08 205.041);
+  --fmt-neutral-bg: oklch(0.967 0.03 264.542);
+  --fmt-neutral-fg: oklch(0.52 0.15 264.376);
+  --fmt-neutral-line: oklch(0.928 0.06 264.376);
+
+  /* 名字必须保留：.membership-header-surface 在消费它 */
+  --sidepanel-surface: var(--card);
+}
+
+/* ───────────────────────────────────────────────────────────
+   深色：跟随系统，不做手动切换。上面的 @custom-variant dark 也改成了同一个
+   media query，所以组件里那些 dark: 类会与这里的 token 同时生效——之前变体
+   基于 .dark class，而项目从来没给 html 加过这个 class，button/badge 里那 6 处
+   dark: 写法一直是死代码。
+
+   下半段与 shadcn CLI 生成的 neutral dark 主题一致；注意官方在深色下把 primary
+   翻成了近白（主按钮变成白底黑字），这不是失误。
+   ────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.269 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.371 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+
+    /* 中性阶梯：深色下"抬面"靠变亮而不是变暗，所以 sunken/wash 比 paper 高一档。
+       描边全走白色低透明度，跟 shadcn 官方的 --border 一样，否则实色细线在深
+       底上会发脏。 */
+    --paper: var(--background);
+    --sunken: oklch(0.205 0 0);
+    --wash: oklch(0.269 0 0);
+    --line: var(--border);
+    --line-soft: oklch(1 0 0 / 6%);
+    --line-strong: oklch(1 0 0 / 20%);
+    --ink: var(--foreground);
+    --ink-strong: oklch(0.87 0 0);
+    --ink-soft: var(--muted-foreground);
+    --ink-faint: oklch(0.556 0 0);
+    --ink-ghost: oklch(0.439 0 0);
+
+    /* 状态四态：深色下改用 500 档实心、400 档文字，浅底与描边改成 500 的
+       15% / 30% 透明叠加——浅色那套 50 档底色在深底上是刷白的。 */
+    --success: oklch(0.723 0.219 149.579);
+    --success-ink: oklch(0.792 0.209 151.711);
+    --success-soft: oklch(0.723 0.219 149.579 / 15%);
+    --success-line: oklch(0.723 0.219 149.579 / 30%);
+    --danger: var(--destructive);
+    --danger-ink: oklch(0.704 0.191 22.216);
+    --danger-soft: oklch(0.637 0.237 25.331 / 15%);
+    --danger-line: oklch(0.637 0.237 25.331 / 30%);
+    --warning: oklch(0.769 0.188 70.08);
+    --warning-ink: oklch(0.828 0.189 84.429);
+    --warning-soft: oklch(0.769 0.188 70.08 / 15%);
+    --warning-line: oklch(0.769 0.188 70.08 / 30%);
+    --info: oklch(0.623 0.214 259.815);
+    --info-ink: oklch(0.707 0.165 254.624);
+    --info-soft: oklch(0.623 0.214 259.815 / 15%);
+    --info-line: oklch(0.623 0.214 259.815 / 30%);
+    --running: var(--info);
+    --running-ink: var(--info-ink);
+    --running-soft: var(--info-soft);
+    --running-line: var(--info-line);
+
+    /* 格式方块：同样改成 500@15% 底 / 400 字 / 500@30% 边 */
+    --fmt-lark-bg: oklch(0.623 0.214 259.815 / 15%);
+    --fmt-lark-fg: oklch(0.707 0.165 254.624);
+    --fmt-lark-line: oklch(0.623 0.214 259.815 / 30%);
+    --fmt-notion-bg: oklch(0.558 0.288 302.321 / 15%);
+    --fmt-notion-fg: oklch(0.714 0.203 305.504);
+    --fmt-notion-line: oklch(0.558 0.288 302.321 / 30%);
+    --fmt-obsidian-bg: oklch(0.606 0.25 292.717 / 15%);
+    --fmt-obsidian-fg: oklch(0.702 0.183 293.541);
+    --fmt-obsidian-line: oklch(0.606 0.25 292.717 / 30%);
+    --fmt-sheet-bg: oklch(0.723 0.219 149.579 / 15%);
+    --fmt-sheet-fg: oklch(0.792 0.209 151.711);
+    --fmt-sheet-line: oklch(0.723 0.219 149.579 / 30%);
+    --fmt-doc-bg: oklch(0.623 0.214 259.815 / 15%);
+    --fmt-doc-fg: oklch(0.707 0.165 254.624);
+    --fmt-doc-line: oklch(0.623 0.214 259.815 / 30%);
+    --fmt-text-bg: oklch(0.704 0.14 182.503 / 15%);
+    --fmt-text-fg: oklch(0.777 0.152 181.912);
+    --fmt-text-line: oklch(0.704 0.14 182.503 / 30%);
+    --fmt-markup-bg: oklch(0.705 0.213 47.604 / 15%);
+    --fmt-markup-fg: oklch(0.75 0.183 55.934);
+    --fmt-markup-line: oklch(0.705 0.213 47.604 / 30%);
+    --fmt-markup-alt-bg: oklch(0.705 0.213 47.604 / 28%);
+    --fmt-markup-alt-fg: oklch(0.75 0.183 55.934);
+    --fmt-markup-alt-line: oklch(0.705 0.213 47.604 / 45%);
+    --fmt-image-bg: oklch(0.656 0.241 354.308 / 15%);
+    --fmt-image-fg: oklch(0.718 0.202 349.761);
+    --fmt-image-line: oklch(0.656 0.241 354.308 / 30%);
+    --fmt-media-bg: oklch(0.606 0.25 292.717 / 15%);
+    --fmt-media-fg: oklch(0.702 0.183 293.541);
+    --fmt-media-line: oklch(0.606 0.25 292.717 / 30%);
+    --fmt-bundle-bg: oklch(0.795 0.184 86.047 / 15%);
+    --fmt-bundle-fg: oklch(0.852 0.199 91.936);
+    --fmt-bundle-line: oklch(0.795 0.184 86.047 / 30%);
+    --fmt-print-bg: oklch(0.637 0.237 25.331 / 15%);
+    --fmt-print-fg: oklch(0.808 0.114 19.571);
+    --fmt-print-line: oklch(0.637 0.237 25.331 / 30%);
+    --fmt-security-bg: oklch(0.623 0.214 259.815 / 15%);
+    --fmt-security-fg: oklch(0.707 0.165 254.624);
+    --fmt-security-line: oklch(0.623 0.214 259.815 / 30%);
+    --fmt-link-bg: oklch(0.704 0.14 182.503 / 15%);
+    --fmt-link-fg: oklch(0.777 0.152 181.912);
+    --fmt-link-line: oklch(0.704 0.14 182.503 / 30%);
+    --fmt-neutral-bg: oklch(0.623 0.214 259.815 / 12%);
+    --fmt-neutral-fg: oklch(0.707 0.165 254.624);
+    --fmt-neutral-line: oklch(0.623 0.214 259.815 / 26%);
+  }
+}
+
+.clipper-markdown {
+  overflow-wrap: anywhere;
+}
+
+.clipper-markdown > :first-child {
+  margin-top: 0;
+}
+
+.clipper-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.clipper-markdown h1,
+.clipper-markdown h2,
+.clipper-markdown h3,
+.clipper-markdown h4,
+.clipper-markdown h5,
+.clipper-markdown h6 {
+  margin: 1.15em 0 0.45em;
+  color: var(--foreground);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.clipper-markdown h1 {
+  font-size: 1.15rem;
+}
+.clipper-markdown h2 {
+  font-size: 1rem;
+}
+.clipper-markdown h3 {
+  font-size: 0.9rem;
+}
+.clipper-markdown h4,
+.clipper-markdown h5,
+.clipper-markdown h6 {
+  font-size: 0.82rem;
+}
+
+.clipper-markdown p,
+.clipper-markdown ul,
+.clipper-markdown ol,
+.clipper-markdown blockquote,
+.clipper-markdown pre,
+.clipper-markdown table {
+  margin: 0.65em 0;
+}
+
+.clipper-markdown ul,
+.clipper-markdown ol {
+  padding-left: 1.35rem;
+}
+
+.clipper-markdown ul {
+  list-style: disc;
+}
+.clipper-markdown ol {
+  list-style: decimal;
+}
+
+.clipper-markdown a {
+  color: var(--info);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.clipper-markdown img {
+  max-width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-soft);
+}
+
+.clipper-markdown blockquote {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-md);
+  background: var(--sunken);
+  color: var(--ink-soft);
+}
+
+.clipper-markdown code {
+  border-radius: 0.25rem;
+  background: var(--sunken);
+  padding: 0.1rem 0.25rem;
+  font-size: 0.78em;
+}
+
+.clipper-markdown pre {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  padding: 0.75rem;
+}
+
+.clipper-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.clipper-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-meta);
+}
+
+.clipper-markdown th,
+.clipper-markdown td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.45rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    min-width: 360px;
+    height: 100vh;
+    margin: 0;
+    overflow: hidden;
+    /* 让原生滚动条、输入法候选框、number 输入框的 spinner 跟着主题走 */
+    color-scheme: light dark;
+  }
+
+  body {
+    /* font-family 走 Tailwind 默认的 font-sans，不覆盖 */
+    @apply bg-background font-sans text-foreground;
+    font-size: 13px;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@keyframes sidepanel-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sidepanel-fade-up {
+  animation: sidepanel-fade-up 0.28s ease both;
+}
+
+.membership-surface {
+  /* color-mix 是 Tailwind v4 的浏览器基线要求（Chrome 111+），无需再写纯色兜底。 */
+  background: color-mix(in oklab, var(--background) 86%, var(--sunken));
+}
+
+.membership-header-surface {
+  background: var(--sidepanel-surface);
+}
+
+.settings-main {
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.settings-content {
+  container: settings-content / inline-size;
+}
+
+.settings-card-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.settings-detail-panel {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--card) 76%, var(--sunken));
+  box-shadow: var(--shadow-panel);
+}
+
+.setting-row {
+  display: grid;
+  min-block-size: 4.5rem;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.setting-row-body {
+  display: flex;
+  min-inline-size: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.setting-row-control {
+  min-inline-size: max-content;
+  justify-self: end;
+}
+
+.settings-detail-panel {
+  padding: 1rem;
+}
+
+@container settings-content (max-width: 560px) {
+  .setting-row {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .setting-row-control {
+    min-inline-size: 0;
+    inline-size: 100%;
+    justify-self: stretch;
+  }
+
+  .setting-row-control > [data-slot="toggle-group"] {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+}
+
+.announcement-copy {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-wrap: pretty;
+}
+
+/* 等价于 shadcn 的 <Badge variant="secondary">：中性灰底、无描边。
+   会员状态是身份信息而不是操作，用 secondary 而不是彩色，才是官方默认里
+   这类标签的位置。 */
+.membership-status-badge {
+  border-color: transparent;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  box-shadow: none;
+}
+
+@keyframes task-status-ping {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.45;
+  }
+
+  80%,
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.task-status-ping {
+  animation: task-status-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-status-ping,
+  .sidepanel-fade-up,
+  .animate-spin {
+    animation: none;
+  }
+}
