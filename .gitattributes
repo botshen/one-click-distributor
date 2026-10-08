@@ -1,0 +1,2 @@
+# Upstream notices are compared verbatim by the sync script; keep CRLF as shipped.
+public/licenses/* -text

@@ -21,3 +21,21 @@ pnpm build
 ```
 
 构建目录为 `.output/chrome-mv3`。
+
+`pnpm dev` 使用端口 3017，不自动打开浏览器。开发输出为 `.output/chrome-mv3-dev`，可在 Chrome 中手动加载。
+
+## 共享组件
+
+使用开源组件库 [`kabuda-kit`](https://github.com/botshen/kabuda-kit)（npm 同名包，MIT），依赖为精确版本，升级时显式修改 `package.json` 并重新验证：
+
+```sh
+pnpm add kabuda-kit@<version> --save-exact
+```
+
+`components/ui` 是本项目组件入口，Button、Badge、Card、Alert 转导出共享组件；`lib/utils.ts` 转导出共享工具。共享主题、字体在 `entrypoints/workbench/globals.css` 导入，业务变量映射至 `--ui-*`，跟随系统明暗模式。Sonner 是本项目的通知适配层，业务调用继续保留。
+
+基础组件只在 kabuda-kit 仓库修改并发布新版本，本项目不维护组件实现。构建和开发启动会自动执行 `sync:ui-notices`，从已安装的 kabuda-kit 复制 LICENSE 与 THIRD_PARTY_NOTICES 到 `public/licenses`，随扩展分发；非 MIT 版本会阻止构建。
+
+## 开源与依赖许可
+
+本插件自有代码使用 MIT，LICENSE 位于仓库根；共享 UI kabuda-kit 独立维护和发布，同为 MIT。随扩展保留 public/licenses 下的第三方声明。

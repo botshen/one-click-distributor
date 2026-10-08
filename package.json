@@ -6,26 +6,23 @@
   "packageManager": "pnpm@11.15.0",
   "type": "module",
   "scripts": {
-    "dev": "wxt",
-    "build": "wxt build",
-    "zip": "wxt zip",
+    "dev": "pnpm sync:ui-notices && wxt",
+    "build": "pnpm sync:ui-notices && wxt build",
+    "zip": "pnpm sync:ui-notices && wxt zip",
     "compile": "wxt prepare && tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "sync:ui-notices": "node scripts/sync-ui-notices.mjs"
   },
   "dependencies": {
     "@wxt-dev/module-react": "^1.1.5",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
+    "kabuda-kit": "0.3.0",
     "lucide-react": "^1.18.0",
     "markdown-it": "^14.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sonner": "^2.0.7",
-    "tailwind-merge": "^3.3.1",
-    "tw-animate-css": "^1.3.0",
-    "@radix-ui/react-slot": "^1.2.5"
+    "sonner": "^2.0.7"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
@@ -33,10 +30,11 @@
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
+    "linkedom": "0.18.12",
     "tailwindcss": "^4.3.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.9",
-    "wxt": "^0.20.26",
-    "linkedom": "0.18.12"
-  }
+    "wxt": "^0.20.26"
+  },
+  "license": "MIT"
 }

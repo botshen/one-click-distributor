@@ -3,6 +3,14 @@ import { defineConfig } from "wxt";
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  dev: {
+    server: {
+      port: 3017,
+    },
+  },
+  webExt: {
+    disabled: true,
+  },
   manifest: {
     name: "一键分发 - Markdown 多平台草稿",
     description: "编辑或导入 Markdown，一键填入微信公众号、知乎、掘金和知识星球草稿。",
@@ -19,5 +27,8 @@ export default defineConfig({
       "https://wx.zsxq.com/*",
     ],
   },
-  vite: () => ({ plugins: [tailwindcss()] }),
+  vite: () => ({
+    plugins: [tailwindcss()],
+    resolve: { dedupe: ["react", "react-dom"] },
+  }),
 });
