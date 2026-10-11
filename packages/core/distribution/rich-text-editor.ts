@@ -410,9 +410,14 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
         editor.querySelectorAll("img").length === expectedImages
       );
     };
+    const hasEditorContent = () => {
+      editor = findEditor() ?? editor;
+      return Boolean(normalize(editor.textContent ?? "") || editor.querySelector("img"));
+    };
     setTitle(title);
     editor = findEditor() ?? editor;
     let filled = false;
+    let nativeFilled = false;
     if (platform === "wechat") {
       const page = window as unknown as {
         MP_Editor_JSAPI?: { invoke(params: unknown): void };
@@ -422,25 +427,54 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
       const api = page.MP_Editor_JSAPI ?? page.__MP_Editor_JSAPI__;
       if (api?.invoke) {
         await clear(editor);
+        if (hasEditorContent()) throw new Error("公众号旧正文未清空，已停止插入以避免重复填稿");
         for (const [apiName, apiParam] of [
           ["mp_editor_insert_html", { html, isSelect: false }],
           ["mp_editor_set_content", { content: html }],
         ] as const) {
           try {
-            api.invoke({ apiName, apiParam, sucCb: () => {}, errCb: () => {} });
-            filled = await waitUntil(matches, 1500);
-            if (filled) break;
+            let rejected = false;
+            api.invoke({
+              apiName,
+              apiParam,
+              sucCb: () => {},
+              errCb: () => {
+                rejected = true;
+              },
+            });
+            await waitUntil(() => matches() || rejected, 10_000);
+            filled = matches();
+            if (filled) {
+              nativeFilled = true;
+              break;
+            }
+            // Never invoke a second native writer after the first one. The
+            // first API may still be processing asynchronously, and another
+            // call would append the same article a second time.
+            return {
+              success: false,
+              message: rejected
+                ? "微信公众号原生插入失败，已停止后续插入，请检查目标页面后重试。"
+                : "微信公众号原生插入尚未确认完成；为避免重复填稿，已停止后续插入，请检查目标页面。",
+              warnings,
+            };
           } catch {
             /* Try next API, then the editor-specific fallback. */
           }
         }
       }
       if (!filled && page.UE?.getEditor) {
+        let invoked = false;
         try {
           page.UE.getEditor("ueditor_0").setContent(html);
-          filled = await waitUntil(matches, 1500);
+          invoked = true;
         } catch {
           /* Fall through to the DOM paste path. */
+        }
+        if (invoked) {
+          filled = await waitUntil(matches, 10_000);
+          nativeFilled = filled;
+          if (!filled) throw new Error("公众号正在处理原生插入，已停止后续插入以避免重复填稿");
         }
       }
     }
@@ -460,17 +494,27 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
         quill.clipboard.dangerouslyPasteHTML(html, "user");
         quill.update?.("user");
         filled = await waitUntil(matches, 1000);
+        nativeFilled = filled;
       }
     }
     if (!filled) {
       await clear(editor);
+      if (platform === "wechat" && hasEditorContent())
+        throw new Error("公众号旧正文未清空，已停止插入以避免重复填稿");
       selectContents(editor);
       paste(editor, html);
-      filled = await waitUntil(matches, platform === "zhihu" ? 3000 : 500);
+      filled = await waitUntil(
+        matches,
+        platform === "wechat" ? 10_000 : platform === "zhihu" ? 3000 : 500,
+      );
+      if (!filled && platform === "wechat" && hasEditorContent())
+        throw new Error("公众号正在处理粘贴或回读不一致，已停止后续插入以避免重复填稿");
       if (!filled) {
         selectContents(editor);
-        editor.ownerDocument.execCommand("insertHTML", false, html);
-        filled = await waitUntil(matches, 1000);
+        const inserted = editor.ownerDocument.execCommand("insertHTML", false, html);
+        filled = await waitUntil(matches, platform === "wechat" ? 10_000 : 1000);
+        if (!filled && platform === "wechat" && (inserted || hasEditorContent()))
+          throw new Error("公众号正在处理插入或回读不一致，已停止后续插入以避免重复填稿");
       }
       if (!filled && platform !== "zhihu") {
         editor.innerHTML = html;
@@ -485,7 +529,9 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
         filled = await waitUntil(matches, 1000);
       }
     }
-    notify(editor);
+    // Native editors already receive and reconcile their own mutation. Sending
+    // another input event here can make WeChat insert the same HTML twice.
+    if (!nativeFilled && platform !== "wechat") notify(editor);
     await delay(500); // Allow React/ProseMirror/Quill to reconcile before reading back.
     const insertionFailure =
       platform === "wechat"

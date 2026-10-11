@@ -9,6 +9,14 @@ afterEach(() => vi.useRealTimers());
 
 function page(markup: string, url: string) {
   const window = parseHTML(`<html><head></head><body>${markup}</body></html>`);
+  // linkedom's window proxies arbitrary properties to the Node global object.
+  // Each fixture must start without native APIs installed by previous tests.
+  Object.assign(window, {
+    MP_Editor_JSAPI: undefined,
+    __MP_Editor_JSAPI__: undefined,
+    UE: undefined,
+    Quill: undefined,
+  });
   const document = window.document;
   let selected: HTMLElement | undefined;
   Object.defineProperty(window.HTMLElement.prototype, "getClientRects", {
@@ -131,6 +139,149 @@ describe("serialized platform editor adapters", () => {
     expect(fixture.document.querySelector(".ProseMirror")?.textContent).toBe("辅助区域");
     expect(fixture.document.querySelector<HTMLInputElement>("#title")?.value).toBe("公众号测试");
     expect(main?.textContent).toBe("新的正文");
+  });
+
+  it("does not dispatch a second input event after native WeChat insertion", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const duplicate = "重复正文";
+    main?.addEventListener("input", () => {
+      if (main?.textContent === duplicate) main.innerHTML += `<p>${duplicate}</p>`;
+    });
+    const invoke = vi.fn((params: { apiParam: { html?: string; content?: string } }) => {
+      if (main) main.innerHTML = params.apiParam.html ?? params.apiParam.content ?? "";
+    });
+    Object.assign(fixture.window, { MP_Editor_JSAPI: { invoke } });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "重复测试",
+      html: `<p>${duplicate}</p>`,
+    });
+    expect(result.success).toBe(true);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(main?.textContent).toBe(duplicate);
+  });
+
+  it("waits for asynchronous WeChat JSAPI insertion without invoking a second writer", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const invoke = vi.fn((params: { apiParam: { html: string }; sucCb(): void }) => {
+      setTimeout(() => {
+        if (main) main.innerHTML += params.apiParam.html;
+        params.sucCb();
+      }, 3000);
+    });
+    const setContent = vi.fn();
+    Object.assign(fixture.window, {
+      MP_Editor_JSAPI: { invoke },
+      UE: { getEditor: () => ({ setContent }) },
+    });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "延迟测试",
+      html: "<p>单次正文</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(main?.textContent).toBe("单次正文");
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(setContent).not.toHaveBeenCalled();
+  });
+
+  it("does not issue another write when native WeChat insertion times out", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const invoke = vi.fn((params: { apiParam: { html: string } }) => {
+      setTimeout(() => {
+        if (main) main.innerHTML += params.apiParam.html;
+      }, 12_000);
+    });
+    Object.assign(fixture.window, { MP_Editor_JSAPI: { invoke } });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "超时测试",
+      html: "<p>迟到正文</p>",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("避免重复填稿");
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(main?.textContent).toBe("迟到正文");
+  });
+
+  it("does not fall back to another API when native WeChat readback differs", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const invoke = vi.fn((params: { apiParam: { html: string } }) => {
+      if (main) main.innerHTML += `${params.apiParam.html}<span>处理中</span>`;
+    });
+    const setContent = vi.fn();
+    Object.assign(fixture.window, {
+      MP_Editor_JSAPI: { invoke },
+      UE: { getEditor: () => ({ setContent }) },
+    });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "差异测试",
+      html: "<p>单次正文</p>",
+    });
+    expect(result.success).toBe(false);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(setContent).not.toHaveBeenCalled();
+    expect(main?.textContent).toBe("单次正文处理中");
+  });
+
+  it("waits for a delayed WeChat paste instead of also inserting HTML", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    main?.addEventListener("paste", (event) => {
+      event.preventDefault();
+      const html = (
+        event as unknown as { clipboardData: { getData(type: string): string } }
+      ).clipboardData.getData("text/html");
+      setTimeout(() => {
+        if (main) main.innerHTML += html;
+      }, 1200);
+    });
+    const commands = vi.spyOn(fixture.document, "execCommand");
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "粘贴测试",
+      html: "<p>单次正文</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(main?.textContent).toBe("单次正文");
+    expect(commands.mock.calls.some(([command]) => command === "insertHTML")).toBe(false);
+  });
+
+  it("replaces duplicated existing WeChat text on repeated fills", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"><p>正文</p><p>正文</p></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const input: RichTextEditorInput = {
+      platform: "wechat",
+      title: "重复填入",
+      html: "<p>正文</p>",
+    };
+    expect((await fill(fixture, input)).success).toBe(true);
+    expect((await fill(fixture, input)).success).toBe(true);
+    expect(main?.textContent).toBe("正文");
+    expect(main?.querySelectorAll("p")).toHaveLength(1);
   });
 
   it("finds the current WeChat contenteditable title without relying on #title", async () => {
