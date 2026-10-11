@@ -178,6 +178,13 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
       ? element.value
       : (element.textContent ?? "");
   }
+  function editorText(element: HTMLElement) {
+    return element.innerText ?? element.textContent ?? "";
+  }
+  function isEditorPlaceholder(element: HTMLElement) {
+    const text = normalize(editorText(element));
+    return /^(从这里开始写正文|从这里开始写文章|请输入正文|请输入内容)$/.test(text);
+  }
   function selectContents(element: HTMLElement, collapse = false) {
     element.focus();
     const doc = element.ownerDocument;
@@ -195,6 +202,10 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     if (normalize(element.textContent ?? "") || element.querySelector("img")) {
       // Same last resort as the reference. The input event lets DOM-backed editors observe the mutation.
       element.innerHTML = "";
+      notify(element);
+      await delay(150);
+    } else {
+      // Let editors restore their own empty-state placeholder after deletion.
       notify(element);
       await delay(150);
     }
@@ -412,7 +423,8 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     };
     const hasEditorContent = () => {
       editor = findEditor() ?? editor;
-      return Boolean(normalize(editor.textContent ?? "") || editor.querySelector("img"));
+      if (isEditorPlaceholder(editor)) return false;
+      return Boolean(normalize(editorText(editor)) || editor.querySelector("img"));
     };
     setTitle(title);
     editor = findEditor() ?? editor;

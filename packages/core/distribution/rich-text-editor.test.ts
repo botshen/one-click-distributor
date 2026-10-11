@@ -315,6 +315,39 @@ describe("serialized platform editor adapters", () => {
     expect(fixture.document.querySelector(".ProseMirror")?.textContent).toBe("作者介绍摘要封面");
   });
 
+  it("treats the WeChat body placeholder as an empty editor", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true">从这里开始写正文</div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "占位提示测试",
+      html: "<p>真实正文</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(main?.textContent).toBe("真实正文");
+  });
+
+  it("allows the WeChat placeholder to return after clearing the editor", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true">旧正文</div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const main = fixture.document.querySelector(".ProseMirror");
+    main?.addEventListener("input", () => {
+      if (!main?.textContent) main.innerHTML = "从这里开始写正文";
+    });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "清空后占位测试",
+      html: "<p>真实正文</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(main?.textContent).toBe("真实正文");
+  });
+
   it("accepts WeChat title readback with editor-only zero-width markers and line breaks", async () => {
     const fixture = page(
       '<div class="title-input" contenteditable="true">请在这里输入标题</div><div class="ProseMirror" contenteditable="true"></div>',
