@@ -7,6 +7,7 @@ import {
 } from "./platforms";
 import { prepareZhihuImages, renderDistributionHtml } from "./rich-text";
 import { fillRichTextEditor } from "./rich-text-editor";
+import { prepareWechatTab } from "./wechat-tab";
 
 export async function fillPlatformTab(
   platform: PlatformId,
@@ -14,6 +15,29 @@ export async function fillPlatformTab(
   input: { title: string; markdown: string },
   onProgress?: (message: string) => void,
 ): Promise<PlatformFillResult> {
+  try {
+    if (!input.title.trim() || !input.markdown.trim()) {
+      return { success: false, message: "请先填写标题和正文" };
+    }
+    return await fillReadyPlatformTab(platform, tabId, input, onProgress);
+  } catch (error) {
+    return {
+      success: false,
+      message: `${getDistributionPlatform(platform).name}填稿失败：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+async function fillReadyPlatformTab(
+  platform: PlatformId,
+  tabId: number,
+  input: { title: string; markdown: string },
+  onProgress?: (message: string) => void,
+): Promise<PlatformFillResult> {
+  if (platform === "wechat") {
+    const prepared = await prepareWechatTab(tabId, onProgress);
+    if (!prepared.success) return prepared;
+  }
   const tab = await browser.tabs.get(tabId);
   if (!isPlatformEditorUrl(platform, tab.url)) {
     return {

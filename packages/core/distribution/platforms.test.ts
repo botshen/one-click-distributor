@@ -19,6 +19,9 @@ describe("distribution target routing", () => {
   it("rejects home pages, answers, small green books and lookalike domains", () => {
     expect(isPlatformEditorUrl("wechat", "https://mp.weixin.qq.com/")).toBe(false);
     expect(
+      isPlatformEditorUrl("wechat", "https://mp.weixin.qq.com/cgi-bin/appmsg?begin=0&token=123"),
+    ).toBe(false);
+    expect(
       isPlatformEditorUrl("wechat", "https://mp.weixin.qq.com/cgi-bin/appmsg?createType=8"),
     ).toBe(false);
     expect(
@@ -50,5 +53,17 @@ describe("distribution target routing", () => {
     expect(await findPlatformTab("wechat", 2)).toBe(3);
     expect(await findPlatformTab("juejin", 3)).toBe(4);
     expect(await findPlatformTab("zhihu", 3)).toBeUndefined();
+  });
+
+  it("reuses an already open portal when a draft has no remembered tab", async () => {
+    vi.stubGlobal("browser", {
+      tabs: {
+        query: vi.fn().mockResolvedValue([
+          { id: 7, url: "https://mp.weixin.qq.com/cgi-bin/home?token=123", lastAccessed: 100 },
+          { id: 8, url: "https://mp.weixin.qq.com/", lastAccessed: 10 },
+        ]),
+      },
+    });
+    expect(await findPlatformTab("wechat")).toBe(7);
   });
 });

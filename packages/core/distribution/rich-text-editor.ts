@@ -19,6 +19,7 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     platform === "wechat"
       ? location.hostname === "mp.weixin.qq.com" &&
         location.pathname === "/cgi-bin/appmsg" &&
+        new URLSearchParams(location.search).get("action") === "edit" &&
         (new URLSearchParams(location.search).get("createType") ??
           new URLSearchParams(location.search).get("createtype")) !== "8"
       : platform === "zhihu"
@@ -33,7 +34,12 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
   }
   const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   const normalize = (value: string) => value.replace(/[\s\u200b\ufeff]+/g, "");
+  // The WeChat title contenteditable may retain zero-width markers or a line
+  // break after reconciling a programmatic change. Keep ordinary spaces
+  // meaningful while ignoring those editor-only characters.
+  const normalizeTitle = (value: string) => value.replace(/[\u200b\ufeff\r\n]+/g, "").trim();
   const warnings = [...(input.warnings ?? [])];
+  let wechatTitle: HTMLElement | null = null;
   function visible(element: HTMLElement) {
     const style = getComputedStyle(element);
     return (
@@ -45,13 +51,54 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
   function find(selectors: string): HTMLElement | null {
     return Array.from(document.querySelectorAll<HTMLElement>(selectors)).find(visible) ?? null;
   }
+  function editableElements(): HTMLElement[] {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        'input, textarea, [contenteditable]:not([contenteditable="false"])',
+      ),
+    ).filter(visible);
+  }
+  function attributesHint(element: HTMLElement): string {
+    return [
+      element.id,
+      element.className?.toString(),
+      element.getAttribute("placeholder"),
+      element.getAttribute("data-placeholder"),
+      element.getAttribute("aria-label"),
+      element.getAttribute("role"),
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
   function findTitle() {
+    if (platform === "wechat") {
+      if (wechatTitle?.isConnected && visible(wechatTitle)) return wechatTitle;
+      const explicit = editableElements().filter((element) => {
+        const attributes = attributesHint(element);
+        const text = (element.textContent ?? "").trim();
+        return (
+          element.id === "title" ||
+          /(?:^|[-_ ])title(?:[-_ ]|$)/i.test(attributes) ||
+          /(?:文章)?标题/.test(attributes) ||
+          /^(?:请在这里输入标题|请输入标题)$/.test(text)
+        );
+      });
+      if (explicit[0]) {
+        wechatTitle = explicit[0];
+        return wechatTitle;
+      }
+      wechatTitle =
+        editableElements().find((element) => {
+          if (!element.hasAttribute("contenteditable")) return false;
+          const rect = element.getBoundingClientRect();
+          return rect.width > 300 && rect.height > 20 && rect.height < 160;
+        }) ?? null;
+      return wechatTitle;
+    }
     return find(
-      platform === "wechat"
-        ? "#title"
-        : platform === "zhihu"
-          ? '.WriteIndex-titleInput input, .WriteIndex-titleInput textarea, textarea[placeholder*="标题"], input[placeholder*="标题"], .WriteIndex-titleInput[contenteditable="true"]'
-          : 'input[placeholder*="请输入主题"], input[placeholder*="标题"], textarea[placeholder*="标题"], .topic-input input',
+      platform === "zhihu"
+        ? '.WriteIndex-titleInput input, .WriteIndex-titleInput textarea, textarea[placeholder*="标题"], input[placeholder*="标题"], .WriteIndex-titleInput[contenteditable="true"]'
+        : 'input[placeholder*="请输入主题"], input[placeholder*="标题"], textarea[placeholder*="标题"], .topic-input input',
     );
   }
   function findEditor(): HTMLElement | null {
@@ -63,19 +110,31 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
       return find(
         '.ql-editor[contenteditable="true"], .editor-content[contenteditable="true"], [contenteditable="true"]:not(.ql-editor-placeholder)',
       );
-    const candidates = Array.from(
-      document.querySelectorAll<HTMLElement>('.ProseMirror[contenteditable="true"]'),
-    ).filter(
-      (element) => visible(element) && !element.classList.contains("editor_content_placeholder"),
-    );
+    const title = findTitle();
+    const candidates = editableElements().filter((element) => {
+      if (element === title || !element.hasAttribute("contenteditable")) return false;
+      if (
+        element.matches(
+          ".editor_content_placeholder, .original_primary_tips_input, .js_reprint_recommend_content",
+        )
+      )
+        return false;
+      // Body text can itself discuss authors, abstracts or covers.
+      if (/作者|摘要|封面|原文链接/.test(attributesHint(element))) return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 300 && rect.height > 120;
+    });
     const score = (element: HTMLElement) => {
       const rect = element.getBoundingClientRect();
       return (
         rect.width * rect.height +
+        (/(?:正文|从这里开始写)/.test(`${attributesHint(element)} ${element.textContent ?? ""}`)
+          ? 4_000_000
+          : 0) +
+        (element.classList.contains("ProseMirror") ? 2_000_000 : 0) +
         (element.closest("#ueditor_0") ? 2_000_000 : 0) +
         (element.closest(".mock-iframe-body") ? 1_000_000 : 0) +
-        (element.closest(".rich_media_content") ? 500_000 : 0) -
-        ((element.innerText ?? "").includes("从这里开始写正文") ? 200_000 : 0)
+        (element.closest(".rich_media_content") ? 500_000 : 0)
       );
     };
     candidates.sort((a, b) => score(b) - score(a));
@@ -86,21 +145,7 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     } catch {
       /* Cross-origin iframe. */
     }
-    return (
-      Array.from(document.querySelectorAll<HTMLElement>('[contenteditable="true"]')).find(
-        (element) => {
-          if (
-            !visible(element) ||
-            element.matches(
-              ".editor_content_placeholder, .original_primary_tips_input, .js_reprint_recommend_content",
-            )
-          )
-            return false;
-          const rect = element.getBoundingClientRect();
-          return rect.width > 300 && rect.height > 200;
-        },
-      ) ?? null
-    );
+    return null;
   }
   async function waitUntil(check: () => boolean, timeout: number) {
     const start = Date.now();
@@ -203,6 +248,19 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     }
 
     if (platform === "wechat") {
+      // WeChat rejects external anchors in pasted article HTML. Preserve their labels.
+      for (const link of Array.from(content.querySelectorAll("a[href]"))) {
+        const href = link.getAttribute("href") ?? "";
+        if (href.startsWith("#")) continue;
+        try {
+          const url = new URL(href, location.origin);
+          if (/^https?:$/.test(url.protocol) && /(^|\.)weixin\.qq\.com$/.test(url.hostname))
+            continue;
+        } catch {
+          /* Invalid links become plain text. */
+        }
+        link.replaceWith(...Array.from(link.childNodes));
+      }
       const token = new URLSearchParams(location.search).get("token");
       const fingerprint =
         Array.from(document.scripts)
@@ -339,7 +397,10 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
       }
     }
 
-    const html = content.innerHTML;
+    const html =
+      platform === "wechat"
+        ? `<section style="margin-left:6px;margin-right:6px;line-height:1.75em;color:#3f3f3f;font-size:15px;">${content.innerHTML}</section>`
+        : content.innerHTML;
     const expectedText = normalize(content.textContent ?? "");
     const expectedImages = content.querySelectorAll("img").length;
     const matches = () => {
@@ -374,12 +435,12 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
           }
         }
       }
-      if (!filled && editor.ownerDocument !== document && page.UE?.getEditor) {
+      if (!filled && page.UE?.getEditor) {
         try {
           page.UE.getEditor("ueditor_0").setContent(html);
           filled = await waitUntil(matches, 1500);
         } catch {
-          /* The reference also falls back to the iframe body when the UEditor API fails. */
+          /* Fall through to the DOM paste path. */
         }
       }
     }
@@ -426,7 +487,24 @@ export async function fillRichTextEditor(input: RichTextEditorInput): Promise<Pl
     }
     notify(editor);
     await delay(500); // Allow React/ProseMirror/Quill to reconcile before reading back.
-    if (!filled || !matches() || titleValue(findTitle() ?? title) !== input.title) {
+    const insertionFailure =
+      platform === "wechat"
+        ? (document.body?.innerText ?? document.body?.textContent ?? "").match(
+            /有\s*\d+\s*个内容插入失败(?:\s*[·・]\s*查看失败内容)?/,
+          )?.[0]
+        : undefined;
+    if (insertionFailure) {
+      return {
+        success: false,
+        message: `微信公众号提示“${insertionFailure}”，请在目标页面查看失败内容后重试。`,
+        warnings,
+      };
+    }
+    if (
+      !filled ||
+      !matches() ||
+      normalizeTitle(titleValue(findTitle() ?? title)) !== normalizeTitle(input.title)
+    ) {
       return {
         success: false,
         message: `${name}编辑器回读与稿件不一致，请到目标页面检查后重试。`,

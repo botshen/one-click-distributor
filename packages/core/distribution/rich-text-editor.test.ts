@@ -133,6 +133,103 @@ describe("serialized platform editor adapters", () => {
     expect(main?.textContent).toBe("新的正文");
   });
 
+  it("finds the current WeChat contenteditable title without relying on #title", async () => {
+    const fixture = page(
+      '<div class="title-input" contenteditable="true">请在这里输入标题</div><div class="editor-shell"><div contenteditable="true">旧正文</div></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const editor = fixture.document.querySelector(".editor-shell [contenteditable]");
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "动态标题",
+      html: "<p>新的正文</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(fixture.document.querySelector(".title-input")?.textContent).toBe("动态标题");
+    expect(editor?.textContent).toBe("新的正文");
+  });
+
+  it("keeps a title identified only by its placeholder text after filling it", async () => {
+    const fixture = page(
+      '<div contenteditable="true">请在这里输入标题</div><div class="ProseMirror" contenteditable="true">旧正文</div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "测试标题",
+      html: "<p>作者介绍摘要封面</p>",
+    });
+    expect(result.success).toBe(true);
+    expect(fixture.document.querySelector("[contenteditable]")?.textContent).toBe("测试标题");
+    expect(fixture.document.querySelector(".ProseMirror")?.textContent).toBe("作者介绍摘要封面");
+  });
+
+  it("accepts WeChat title readback with editor-only zero-width markers and line breaks", async () => {
+    const fixture = page(
+      '<div class="title-input" contenteditable="true">请在这里输入标题</div><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const title = fixture.document.querySelector(".title-input");
+    title?.addEventListener("input", () => {
+      if (title) title.textContent = `${title.textContent}\u200b\n`;
+    });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "视觉一致标题",
+      html: "<p>正文</p>",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("still rejects a genuinely different WeChat title", async () => {
+    const fixture = page(
+      '<div class="title-input" contenteditable="true">请在这里输入标题</div><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const title = fixture.document.querySelector(".title-input");
+    title?.addEventListener("input", () => {
+      if (title) title.textContent = "另一个标题";
+    });
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "视觉一致标题",
+      html: "<p>正文</p>",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("回读与稿件不一致");
+  });
+
+  it("removes external anchors while preserving labels, formatting and WeChat links", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "链接测试",
+      html: '<p><a href="https://example.com"><strong>外部内容</strong></a><a href="https://mp.weixin.qq.com/s/example">微信文章</a></p>',
+    });
+    expect(result.success).toBe(true);
+    const editor = fixture.document.querySelector(".ProseMirror");
+    expect(editor?.querySelectorAll("a")).toHaveLength(1);
+    expect(editor?.querySelector("strong")?.textContent).toBe("外部内容");
+    expect(editor?.querySelector("section")).not.toBeNull();
+  });
+
+  it("does not report success when WeChat shows an insertion failure", async () => {
+    const fixture = page(
+      '<input id="title"><div class="ProseMirror" contenteditable="true"></div><div role="alert">有 1 个内容插入失败 · 查看失败内容</div>',
+      "https://mp.weixin.qq.com/cgi-bin/appmsg?action=edit&token=123",
+    );
+    const result = await fill(fixture, {
+      platform: "wechat",
+      title: "失败测试",
+      html: "<p>正文</p>",
+    });
+    expect(result.success).toBe(false);
+    expect(result.message).toContain("插入失败");
+  });
+
   it("replaces existing Zhihu content through an HTML paste", async () => {
     const fixture = page(
       '<textarea placeholder="请输入标题"></textarea><div class="DraftEditor-editorContainer"><div contenteditable="true">旧稿</div></div>',

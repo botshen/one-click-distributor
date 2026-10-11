@@ -15,7 +15,7 @@ export const DISTRIBUTION_PLATFORMS = [
     description: "富文本图文",
     icon: "/platforms/wechat.png",
     editorUrl: "https://mp.weixin.qq.com/",
-    instructions: "登录公众号后台，打开一篇图文的编辑页，再返回工作台填稿。",
+    instructions: "登录公众号后台后返回工作台填稿，扩展会自动进入图文编辑页；填入后请检查并保存。",
     contentLabel: "富文本正文，外链图片转存到公众号图床",
   },
   {
@@ -76,6 +76,7 @@ export function isPlatformEditorUrl(id: PlatformId, url: string | undefined): bo
     case "wechat":
       return (
         parsed.pathname === "/cgi-bin/appmsg" &&
+        parsed.searchParams.get("action") === "edit" &&
         (parsed.searchParams.get("createType") ?? parsed.searchParams.get("createtype")) !== "8"
       );
     case "zhihu":
@@ -102,5 +103,9 @@ export async function findPlatformTab(
   if (stored && isPlatformEditorUrl(id, stored.url)) return stored.id;
   const editors = tabs.filter((tab) => isPlatformEditorUrl(id, tab.url));
   editors.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0));
-  return editors[0]?.id ?? (isPlatformSiteUrl(id, stored?.url) ? stored?.id : undefined);
+  const sites = tabs.filter((tab) => isPlatformSiteUrl(id, tab.url));
+  sites.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0));
+  return (
+    editors[0]?.id ?? (isPlatformSiteUrl(id, stored?.url) ? stored?.id : undefined) ?? sites[0]?.id
+  );
 }

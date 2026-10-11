@@ -219,7 +219,9 @@ export default function App() {
       toast.error("请先把相对路径图片改成可访问的图片 URL，再填稿。");
       return;
     }
-    const readyPlatforms = selectedPlatforms.filter((id) => targetTabs[id] === "editor");
+    const readyPlatforms = selectedPlatforms.filter(
+      (id) => targetTabs[id] === "editor" || (id === "wechat" && targetTabs[id] === "site"),
+    );
     if (!readyPlatforms.length) {
       toast.error("所选平台尚未进入编辑页，请先准备平台并完成登录。");
       return;
@@ -233,8 +235,20 @@ export default function App() {
       for (const [index, id] of readyPlatforms.entries()) {
         const item = getDistributionPlatform(id);
         setFillProgress(`正在填入 ${item.name}（${index + 1}/${readyPlatforms.length}）…`);
-        const tabId = await findPlatformTab(id, current.platformTabIds?.[id]);
-        if (tabId === undefined) continue;
+        let tabId: number | undefined;
+        try {
+          tabId = await findPlatformTab(id, current.platformTabIds?.[id]);
+        } catch {
+          // Treat a closed or unavailable tab as a per-platform failure.
+        }
+        if (tabId === undefined) {
+          records[id] = {
+            at: Date.now(),
+            status: "failed",
+            message: `${item.name}标签页已关闭或不可访问，请重新打开后重试。`,
+          };
+          continue;
+        }
         const result = await fillPlatformTab(id, tabId, {
           title: current.title.trim(),
           markdown: current.markdown,
@@ -249,7 +263,11 @@ export default function App() {
         if (result.success) successCount++;
       }
       const latest = draftRef.current;
-      if (latest) {
+      if (
+        latest?.id === current.id &&
+        latest.title === current.title &&
+        latest.markdown === current.markdown
+      ) {
         updateDraft({
           platformTabIds: {
             ...latest.platformTabIds,
@@ -846,7 +864,11 @@ export default function App() {
                       !titleReady ||
                       !bodyReady ||
                       relativeImages ||
-                      !selectedPlatforms.some((id) => targetTabs[id] === "editor")
+                      !selectedPlatforms.some(
+                        (id) =>
+                          targetTabs[id] === "editor" ||
+                          (id === "wechat" && targetTabs[id] === "site"),
+                      )
                     }
                     onClick={() => void fillSelectedPlatforms()}
                   >
