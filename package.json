@@ -1,6 +1,6 @@
 {
   "name": "one-click-distributor",
-  "description": "Markdown multi-platform draft distribution Chrome extension.",
+  "description": "Markdown 多平台一键分发 Chrome 扩展。",
   "private": true,
   "version": "0.1.0",
   "packageManager": "pnpm@11.15.0",
